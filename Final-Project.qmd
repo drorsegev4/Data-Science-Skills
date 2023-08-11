@@ -1,0 +1,463 @@
+---
+title: "Final-Project-DS-Skills"
+author: "Dror-Segev"
+format: html
+server: shiny
+
+---
+
+```{r message=FALSE, warning=FALSE}
+
+library(shiny)
+library(knitr)
+library(DT)  
+library(tidyverse)
+library(ggplot2)
+library(caret)
+library(magrittr)
+library(rvest)
+library(glmnet)
+library(corrplot)
+library(grid)
+library(parameters)
+library(performance)
+library(randomForest)
+library(gridExtra)
+
+```
+
+
+
+```{r message=FALSE, warning=FALSE,output= FALSE}
+
+library(shiny)
+# Load necessary libraries
+libraries <- c(
+  "shiny", "knitr", "DT", "tidyverse", "ggplot2", "caret",
+  "magrittr", "rvest", "glmnet", "corrplot", "grid", "parameters",
+  "performance", "randomForest", "gridExtra", "xgboost"
+)
+lapply(libraries, library, character.only = TRUE)
+```
+
+```{r}
+
+# Load and preprocess the data
+data <- read.csv("World Happiness Report 2005-2021.csv")
+data_cleaned <- data %>%
+  na.omit() %>%
+  rename(
+    GDP = `Log.GDP.per.capita`,
+    Happiness = `Life.Ladder`,
+    SocialSupport = `Social.support`,
+    HealthyLifeExpectancy = `Healthy.life.expectancy.at.birth`,
+    Freedom = `Freedom.to.make.life.choices`,
+    Corruption = `Perceptions.of.corruption`,
+    PositiveAffect = `Positive.affect`,
+    NegativeAffect = `Negative.affect`,
+    GovernmentConfidence = `Confidence.in.national.government`
+  )
+
+```
+
+```{r}
+# Select relevant predictor variables
+predictor_vars <- c(
+  "GDP", "SocialSupport", "HealthyLifeExpectancy", "Freedom",
+  "Generosity", "Corruption", "PositiveAffect", "NegativeAffect", "GovernmentConfidence"
+)
+
+```
+
+```{r}
+# Data Preprocessing
+data_processed <- data_cleaned %>%
+  select(Happiness, all_of(predictor_vars))
+```
+
+```{r}
+# Create a subset of your data containing only the relevant variables
+selected_vars <- c("Happiness", predictor_vars)
+
+# Compute the correlation matrix
+cor_matrix <- cor(data_processed[selected_vars])
+
+# Convert the correlation matrix to a long format suitable for ggplot
+cor_long <- as.data.frame(as.table(cor_matrix))
+colnames(cor_long) <- c("Var1", "Var2", "Correlation")
+
+# Define breaks for the color scale
+color_breaks <- seq(from = -1, to = 1, by = 0.2)
+
+```
+
+```{r}
+colors <- c("#003f5c", "#006d87", "#009ea4", "#41cfb2", "#9cffb4")
+custom_palette <- scale_color_manual(values = colors)
+custom_fill_palette <- scale_fill_manual(values = colors)
+colors_single_1 <- c("#ffbcac", "#ff9f8c", "#ff816d", "#ff604f", "#ff3333")
+    colors_single_2 <- c("#caebcc", "#b5f0ba", "#9ef4a8", "#60fc82", "#1fff6e") 
+```
+
+```{r}
+
+
+# Model fitting
+set.seed(123)
+train_index <- createDataPartition(data_processed$Happiness, p = 0.7, list = FALSE)
+train_data <- data_processed[train_index, ]
+test_data <- data_processed[-train_index, ]
+
+lm_model <- lm(Happiness ~ ., data = train_data)
+lm_coeffs <- coef(lm_model)[-1]
+
+rf_model <- randomForest(Happiness ~ ., data = train_data)
+rf_importance <- varImp(rf_model)
+
+xgb_data_matrix <- xgb.DMatrix(data = as.matrix(train_data[, -1]), label = train_data$Happiness)
+xgb_model <- xgboost(data = xgb_data_matrix, nrounds = 100, verbose = 0)
+
+
+```
+
+
+
+```{r ui}
+
+# UI
+
+ui <- fluidPage(
+  navbarPage(
+     title = "World Happiness Research 2005-2021",
+    tabPanel(title = "Introduction",
+            tabsetPanel(
+            tabPanel(title = "About",
+                    tags$p(
+                    span("Welcome to the World Happiness research application! This app aims to explore the factors that contribute to global                                  happiness.The World Happiness dataset spans from 2005 to 2021 and includes various factors such as GDP, Social Support,                              Healthy Life Expectancy, Freedom, Generosity, Corruption, Positive Affect, Negative Affect, and Government Confidence. You                           can use this app to analyze predictor rankings, model comparisons, country distribution plots, correlation matrices, and                             more. Let's start exploring the data and gaining insights into the world's happiness!"),
+                                   style ="line-height: 2 ;")
+                        ),
+           tabPanel(title = "Literature Review",
+                    h4("Data Visualisation: World Happiness at a Glance!"),
+                            "Happiness pertains to a state of wellness characterized by a spectrum of emotions spanning from profound contentment to exuberant gladness and delight. It encompasses feelings of pleasure, gratitude, satisfaction, joy, and more. Psychologists delineate happiness as a sensation rooted in positive emotions like joy, interest, pride, life satisfaction, and an appreciation of moments. In July 2011, the United Nations General Assembly initiated a movement, urging nations to engage in assessing their citizens' happiness and employing this data to inform public policies. The inaugural World Happiness Report was unveiled the subsequent year, capturing international attention from all participating nations. Subsequently, an annual report on national happiness has been published each year. This serves as a fundamental framework for governments and national leaders to explore, facilitating a study that offers insights into the status of happiness within a country. This, in turn, can empower governments to advance and enhance their overall national well-being. Numerous government officials have been harnessing the potential of this data through meticulous analysis to elevate their respective countries. The World Happiness Report has assisted each country in identifying the contributing factors to happiness. This research yields substantial value and significant insights that aid governmental leaders in making critical decisions. By visualizing data-driven factors for each nation, this study provides a foundation for pinpointing the elements that genuinely influence a country's happiness score. The United Nations (UN) General Assembly has been consistently publishing annual reports that are available for download. These reports provide an overview of the Happiness Score based on six key metrics: Economy (GDP per Capita), Family, Health (Life Expectancy), Freedom, Trust, and Generosity. These assessments are meticulously crafted with input from experts across various fields, including economics, psychology, survey analysis, and national statistics, ensuring the accurate measurement of well-being within nations. Each report is structured from a macro to micro perspective, discussing topics such as happiness, mental health, satisfaction, and ethics. The data used for these reports are gathered from sources like the Gallup World Poll Questionnaire and the World Values Survey , which cover diverse areas of interest.
+
+Various factors contribute to the formation of a happy society. Personal experiences of happiness might stem from receiving gifts, engaging in charitable acts, active participation in society, positive thoughts about friends and family, contentment, and robust social and professional connections. Elements such as good physical and mental health, strong relationships, an appreciation for art and nature, satisfactory living standards, and effective coping mechanisms are outlined by Forbes as crucial aspects of a happy society.
+
+Environmental conditions, including season, weather, and temperature, also influence societal happiness. Research based on datasets from the International Social Survey Program (ISSP) and weather data from the National Oceanic and Atmospheric Administration (NOAA) suggests a positive correlation between average weather variables and happiness, alongside economic factors. Psychologist Frederick Herzberg's two-factor theory emphasizes that workplace happiness extends beyond individual recognition and includes factors like company policies, working conditions, wages, and benefits.
+
+Studies have not only explored the components of a happy society but also delved into the factors that contribute to individual happiness. Inner thoughts about others, self-acceptance, lifestyle, and positive activities are linked to personal happiness. Giving to others has also been associated with increased happiness, particularly when the act of giving is voluntary, connected, and impactful. Migration to more developed regions has been found to generally increase happiness. Moreover, research has explored the correlation between mobile phone and internet usage and personal happiness, suggesting a significant relationship.
+
+In a broader sense, maintaining a happy nation is intertwined with various factors discussed above. A nation's development is influenced by the collective health and longevity of its citizens. Economic differences can impact happiness levels, and well-being promotion has become a goal for governments. Technical governance quality and effective policies contribute to a higher level of national happiness. Citizens' understanding of well-being measurements and their selection of supportive politicians can make a substantial difference in a nation's overall well-being.
+
+In summary, this literature review encompasses a comprehensive examination of the factors contributing to individual and societal happiness. It underscores the role of environmental conditions, personal attributes, social connections, governance quality, and even technological advancements in shaping happiness at both individual and national levels.
+",style = "line-height: 2 ;")
+                       )
+           ),
+
+    tabPanel(title = "Methods",
+      tabsetPanel(
+          tabPanel(title = "Method",
+            h3("Methodology for Happiness Prediction"),
+            p("The World Happiness dataset was collected from Kaggle.com and spans from the year 2005 to 2021. The primary objective of this analysis                is to predict the happiness score using various predictor variables available in the dataset. To achieve this, three different models                were implemented and compared: Multiple Regression, Random Forest, and XGBoost."),
+           h4("Data Preprocessing"),
+            p("Before constructing the models, the dataset underwent a preprocessing phase. This involved handling missing values, standardizing or                 normalizing numeric variables, and encoding categorical variables."),
+           h4("Multiple Regression"),
+            p("Multiple Linear Regression was used to model the relationship between the happiness score and predictor variables. The model aims to                identify the linear combination of predictor variables that best predicts the happiness score. It provides insights into the individual               contribution of each predictor variable and their combined effect on the target variable."),
+          h4("Random Forest"),
+           p("Random Forest is an ensemble learning method that constructs multiple decision trees during training and combines their predictions to              improve accuracy and control overfitting. It is particularly effective when dealing with non-linear relationships and interactions                   between variables. The Random Forest model captures complex patterns and can handle both numerical and categorical data."),
+         h4("XGBoost"),
+          p("XGBoost (Extreme Gradient Boosting) is a powerful gradient boosting algorithm that excels in predictive modeling tasks. It builds an                 ensemble of weak learner models sequentially, optimizing for errors made by previous models. XGBoost is known for its high performance,              efficient computation, and handling missing data."),
+         h4("Model Comparison"),
+          p("To assess the performance of the models, several metrics were used, including Root Mean Squared Error (RMSE) and R-squared (R²). RMSE quantifies the average prediction error, while R² measures the proportion of the variance in the target variable explained by the predictors. The model with lower RMSE and higher R² values is considered better in terms of predictive accuracy."),
+         h4("Insights and Interpretation"),
+          p("After model fitting and comparison, insights were gained into the relative importance of predictor variables in determining happiness scores. Additionally, the models provide a basis for interpreting how changes in predictor variables can impact the happiness score."),
+        ),
+        tabPanel(title = "Model Description",
+          h3("Happiness Score Prediction Model"),
+           p("Happiness score data was collected from Kaggle.com from the year 2005 to 2021. The aim is to predict happiness using variables in the dataset by comparing three models: Multiple Regression, Random Forest, and XGBoost."),
+          DTOutput("variable_table")  
+        )
+      )
+    ),
+      # Data Analysis
+      tabPanel(title = "Data Analysis",
+                      tabsetPanel(
+                        # Tables
+                        tabPanel(title = "Tables",
+                                 selectInput("table_choice", "Select a Table:",
+                                             choices = c("Predictor Ranking", "Model Comparison Table")
+                                 ),
+                                 DTOutput("selected_table")
+                        ),
+                        # Plots
+                        tabPanel(title = "Plots",
+                                 selectInput("plot_choice", "Select a Plot:",
+                                             choices = c("Country Distribution plots", "Correlation Matrix",
+                                                        "Linear Regression Coefficients", "Random Forest Feature Importances",
+                                                        "Scatter Plot")),
+                                 uiOutput("selected_plot")
+                        )
+                      )
+             ),
+      # Conclusions tab
+      tabPanel(title ="Conclusions",
+               tags$style(HTML("ul, li {
+                          line-height: 2;
+                        }
+                      ")),
+          HTML("<ul>
+          <li><strong>Strong Positive Correlations:</strong>
+          <ul>
+          <li><strong>GDP (Gross Domestic Product):</strong> The level of a country's economic output, as measured by GDP, exhibits a robust positive               correlation (0.79) with happiness scores. This suggests that higher economic prosperity tends to correspond to greater overall                       happiness within nations.</li>
+          <li><strong>Healthy Life Expectancy:</strong> Countries with higher life expectancies tend to experience greater happiness (correlation of                0.73). This underscores the importance of health and well-being in contributing to overall life satisfaction.</li>
+          <li><strong>Social Support:</strong> A strong positive correlation of 0.72 exists between social support and happiness. Nations with strong               social networks and support systems tend to have higher levels of happiness.</li>
+          </ul>
+          </li>
+          <li><strong>Moderate Positive Correlations:</strong>
+          <ul>
+          <li><strong>Freedom:</strong> Personal freedom is moderately correlated (0.54) with happiness. Societies that prioritize individual                      freedoms and rights often exhibit higher levels of happiness among their citizens.</li>
+          <li><strong>Positive Affect:</strong> The presence of positive emotional experiences, or positive affect, has a moderate positive                        correlation (0.51) with happiness. Countries where people commonly experience positive emotions tend to have higher overall                           happiness.</li>
+         </ul>
+         </li>
+         <li><strong>Weak Correlations:</strong>
+         <ul>
+         <li><strong>Generosity:</strong> Generosity exhibits a relatively weak positive correlation (0.19) with happiness. While contributing to             others can contribute to happiness, it appears to have a smaller impact compared to other factors.</li>
+         <li><strong>Government Confidence:</strong> Confidence in the government has a weak negative correlation (-0.08) with happiness. Lower                  levels of trust in government can slightly dampen overall happiness levels.</li>
+         <li><strong>Negative Affect:</strong> Negative emotional experiences, or negative affect, show a weak negative correlation (-0.31) with                   happiness. Countries where negative emotions are less prevalent tend to have higher levels of happiness.</li>
+        <li><strong>Corruption:</strong> Corruption displays a weak negative correlation (-0.48) with happiness. A higher prevalence of corruption                within a country is associated with lower overall happiness.</li>
+         </ul>
+         </li>
+         </ul>"),
+    mainPanel(
+      tabsetPanel(
+        tabPanel(
+          title = "Reference List",
+          class = "nav-tabs-dark",
+          HTML(
+            '<p>Lee, A. S., Kudbuddin, A., & Teh, P. L. (2019). Data visualisation: World happiness at a glance! Advances in Visual Informatics, 60-70. <a href="https://doi.org/10.1007/978-3-030-34032-2_6" target="_blank">https://doi.org/10.1007/978-3-030-34032-2_6</a>.</p>'
+          )
+        )
+      )
+    )
+  )
+
+
+```
+
+
+```{r server}   
+
+# Define server
+
+server <- function(input, output) {
+  # Render the variable table
+  output$variable_table <- renderDT({
+    variable_table <- data.frame(
+      Variable = c("GDP", "Happiness", "Social Support", "Healthy Life Expectancy",
+                   "Freedom", "Corruption", "Positive Affect", "Negative Affect",
+                   "Government Confidence"),
+      Description = c("Gross Domestic Product", "Life Ladder (Happiness Score)",
+                      "Social Support Score", "Healthy Life Expectancy at Birth",
+                      "Freedom to Make Life Choices", "Perceptions of Corruption",
+                      "Positive Affect Score", "Negative Affect Score",
+                      "Confidence in National Government")
+    )
+    datatable(variable_table, rownames = FALSE)
+  })
+  
+ # Correlation Analysis
+  cor_matrix <- cor(data_cleaned[, c("Happiness", predictor_vars)])
+
+  # Extract correlation of predictors with Happiness
+  cor_with_happiness <- cor_matrix[1, -1]
+
+   # Rank predictors by correlation with Happiness
+  predictor_ranking <- data.frame(
+    Predictor = names(cor_with_happiness),
+    Correlation = cor_with_happiness
+  ) %>%
+    arrange(desc(Correlation))
+  
+  output$predictor_ranking_table <- renderDT({
+    predictor_ranking <- data.frame(
+      Predictor = names(cor_with_happiness),
+      Correlation = cor_with_happiness
+    ) %>%
+      arrange(desc(Correlation))
+    
+    datatable(predictor_ranking, rownames = FALSE)
+  })
+  # Calculate RMSE and R-squared for the models
+  lm_predictions <- predict(lm_model, newdata = test_data)
+  rf_predictions <- predict(rf_model, newdata = test_data)
+  xgb_predictions <- predict(xgb_model, newdata = as.matrix(test_data[, -1]))
+
+  lm_rmse <- sqrt(mean((lm_predictions - test_data$Happiness)^2))
+  rf_rmse <- sqrt(mean((rf_predictions - test_data$Happiness)^2))
+  xgb_rmse <- sqrt(mean((xgb_predictions - test_data$Happiness)^2))
+
+  lm_r_squared <- summary(lm_model)$r.squared
+  rf_r_squared <- cor(rf_predictions, test_data$Happiness)^2
+  xgb_r_squared <- 1 - sum((xgb_predictions - test_data$Happiness)^2) / sum((test_data$Happiness - mean(test_data$Happiness))^2)
+  
+  output$selected_table <- renderDT({
+    if (input$table_choice == "Predictor Ranking") {
+     predictor_ranking
+    } else if (input$table_choice == "Model Comparison Table") {
+   # Generate Model Comparison Table
+     model_comparison <- data.frame(
+        Model = c("Linear Regression", "Random Forest", "XGBoost"),
+       RMSE = c(lm_rmse, rf_rmse, xgb_rmse),
+       R2 = c(lm_r_squared, rf_r_squared, xgb_r_squared)
+     )
+      datatable(model_comparison, rownames = FALSE)
+   }
+ })
+  
+  output$correlation_plot <- renderPlot({
+    selected_vars <- c("Happiness", predictor_vars)
+    cor_matrix <- cor(data_processed[selected_vars])
+    cor_long <- as.data.frame(as.table(cor_matrix))
+    colnames(cor_long) <- c("Var1", "Var2", "Correlation")
+    
+    color_breaks <- seq(from = -1, to = 1, by = 0.2)
+    
+    ggplot(cor_long, aes(x = Var1, y = Var2, fill = Correlation)) +
+      geom_tile() +
+      scale_fill_gradientn(colors = colors, breaks = color_breaks) +
+      labs(title = "Correlation Matrix of Happiness and Predictors",
+           x = "Variable 1",
+           y = "Variable 2") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+      guides(fill = guide_colorbar(breaks = color_breaks,
+                                   labels = color_breaks))
+  })
+  
+  output$selected_plot <- renderUI({
+    if (input$plot_choice == "Country Distribution plots") {
+      fluidRow(
+        column(6, selectInput("selected_country", "Select a Country:",
+                              choices = unique(data_cleaned$Country.name))),
+        column(6, plotOutput("country_distribution_plot"))
+      )
+    } else if (input$plot_choice == "Correlation Matrix") {
+      plotOutput("correlation_plot")
+    } else if (input$plot_choice == "Linear Regression Coefficients") {
+      plotOutput("lm_coeff_plot")
+    } else if (input$plot_choice == "Random Forest Feature Importances") {
+      plotOutput("rf_importance_plot")
+    } else if (input$plot_choice == "Scatter Plot") {
+      fluidRow(
+        column(6, selectInput("x_var", "Select X Variable:",
+                              choices = predictor_vars)),  
+        column(6, selectInput("y_var", "Select Y Variable:",
+                              choices = predictor_vars)), 
+        column(12, plotOutput("scatter_plot"))
+      )
+    }
+  })
+  
+  # Render the country distribution plot
+  output$country_distribution_plot <- renderPlot({
+    selected_country_data <- data_cleaned[data_cleaned$Country.name == input$selected_country, ]
+    colors <- c("#003f5c", "#006d87", "#009ea4", "#41cfb2", "#9cffb4")
+    colors_single_1 <-  c("#6ab8d8", "#39c2d7", "#009ea4", "#006d87", "#003f5c")
+
+    plot <- ggplot(selected_country_data, aes(x = Happiness)) +
+      geom_density(fill = colors[1], alpha = 0.7) +
+      scale_fill_manual(values = colors) +
+      labs(title = paste("Distribution of Happiness in", input$selected_country),
+           x = "Happiness Score",
+           y = "Density")
+    
+    print(plot)
+  })
+
+  output$scatter_plot <- renderPlot({
+    x_var <- input$x_var
+    y_var <- input$y_var
+
+  # Calculate the correlation between the selected variables
+  correlation <- cor(data_processed[, c(x_var, y_var)])
+  
+  # Generate scatter plot for the selected variables
+  scatter_plot_selected <- ggplot(data_processed, aes(x = .data[[x_var]], y = .data[[y_var]])) +
+    geom_point(color = "#006d87", size = 3, alpha = 0.7) +  
+    labs(title = paste("Scatter Plot of", x_var, "vs", y_var),
+         x = x_var,
+         y = y_var,
+         caption = paste("Correlation:", round(correlation, 2))) +
+    theme_minimal() +
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none")  # Remove the legend
+  
+  print(scatter_plot_selected)
+  
+  # Calculate correlations with Happiness for each variable
+  correlations_with_happiness <- sapply(predictor_vars, function(var) {
+    cor(data_processed[[var]], data_processed$Happiness)
+  })
+  
+  # Generate scatter plot for correlations with Happiness
+  scatter_plot_with_correlation <- ggplot(data.frame(Variable = predictor_vars, Correlation = correlations_with_happiness), 
+                                           aes(x = Variable, y = Correlation)) +
+    geom_bar(stat = "identity", fill = "#006d87") +
+    labs(title = "Correlation of Variables with Happiness",
+         x = "Variable",
+         y = "Correlation with Happiness") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  # Combine the scatter plots using grid.arrange
+  multi_panel_plot <- grid.arrange(scatter_plot_selected, scatter_plot_with_correlation,
+                                    ncol = 2, widths = c(1, 1))
+  
+  print(multi_panel_plot)
+})
+  # Render the linear regression coefficients plot
+  output$lm_coeff_plot <- renderPlot({
+  lm_coeffs <- coef(lm_model)[-1]
+  lm_coeff_plot <- ggplot(data.frame(Predictor = names(lm_coeffs), Coefficient = lm_coeffs), aes(x = Predictor, y = Coefficient)) +
+    geom_bar(stat = "identity", fill = colors[1], show.legend = FALSE) + 
+    coord_flip() +
+    labs(title = "Linear Regression Coefficients",
+         x = "Predictor",
+         y = "Coefficient") +
+    theme_minimal() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+  print(lm_coeff_plot)
+})
+
+  # Render the random forest feature importances plot
+  rf_importance <- varImp(rf_model)
+  output$rf_importance_plot <- renderPlot({
+    rf_importance_plot <- ggplot(rf_importance, aes(x = reorder(rownames(rf_importance), Overall), y = Overall)) +
+    geom_bar(stat = "identity", fill = colors[3]) +  # Using your third color
+    coord_flip() +
+    labs(title = "Random Forest Feature Importances",
+         x = "Predictor",
+         y = "Importance") +
+    theme_minimal() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+  print(rf_importance_plot)
+})
+  
+  
+  
+  output$references_link <- renderUI({
+    tags$p("Click the link below to view the references:")
+    tags$a("References List", href = "C:/Users/Dror/Desktop/rproject/Data-Skills-Assigment-1307/references.html", target = "_blank")
+  })
+
+}
+
+  
+# Shiny app
+
+shinyApp(ui, server)
+
+```
