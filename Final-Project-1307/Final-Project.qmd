@@ -10,6 +10,8 @@ server: shiny
 
 library(shiny)
 library(shinythemes)
+library(bslib)
+library(magrittr)
 library(knitr)
 library(DT)  
 library(tidyverse)
@@ -111,15 +113,20 @@ xgb_model <- xgboost(data = xgb_data_matrix, nrounds = 100, verbose = 0)
 
 
 ```{r ui}
-
 # UI
 
 ui <- fluidPage(
-  #shinythemes::themeSelector() # choose custom themes and see how they look
-  theme = shinytheme("yeti"),
-
+  theme = shinytheme("sandstone"),
+    tags$style(
+    HTML(".navbar-default { background-color: #e6a1c3; border-color: #e6a1c3 }"),   
+    HTML(".btn-primary { background-color: #2ecc71; border-color: #2ecc71; }"),
+    HTML(".btn-primary.active, .btn-primary:focus { background-color: #2ecc71; border-color: #2ecc71; box-shadow: none; }"),
+    HTML(".navbar-brand:not(:hover) { color: white; }"),
+    HTML(".navbar-brand { color: white; }"),
+    HTML("h1, h2, h3, h4, h5, h6 { color:  #e6a1c3; }"),                           
+    HTML("a { color: #e6a1c3; }")                                                
+  ),
   navbarPage(
-    
     title = "World Happiness Research 2005-2021",
     tabPanel(title = "Introduction",
              
@@ -265,36 +272,38 @@ server <- function(input, output) {
   cor_matrix <- cor(data_cleaned[, c("Happiness", predictor_vars)])
 
   # Extract correlation of predictors with Happiness
-  cor_with_happiness <- cor_matrix[1, -1]
+  cor_with_happiness <- round(cor_matrix[1, -1],2)
 
    # Rank predictors by correlation with Happiness
-  predictor_ranking <- data.frame(
-    Predictor = names(cor_with_happiness),
-    Correlation = cor_with_happiness
+  predictor_ranking <- data.frame(row.names = NULL,
+    Predictor =  c("Gross Domestic Product", "Life Ladder (Happiness Score)",
+                      "Social Support Score", "Healthy Life Expectancy at Birth",
+                      "Freedom to Make Life Choices", "Perceptions of Corruption",
+                      "Positive Affect Score", "Negative Affect Score",
+                      "Confidence in National Government"),
+    Correlation = c(cor_with_happiness)
   ) %>%
     arrange(desc(Correlation))
   
-  output$predictor_ranking_table <- renderDT({
-    predictor_ranking <- data.frame(
-      Predictor = names(cor_with_happiness),
-      Correlation = cor_with_happiness
-    ) %>%
-      arrange(desc(Correlation))
+  output$predictor_ranking <- renderDT({
     
-    datatable(predictor_ranking, rownames = FALSE)
+    datatable(predictor_ranking)
   })
   # Calculate RMSE and R-squared for the models
   lm_predictions <- predict(lm_model, newdata = test_data)
   rf_predictions <- predict(rf_model, newdata = test_data)
   xgb_predictions <- predict(xgb_model, newdata = as.matrix(test_data[, -1]))
 
-  lm_rmse <- sqrt(mean((lm_predictions - test_data$Happiness)^2))
-  rf_rmse <- sqrt(mean((rf_predictions - test_data$Happiness)^2))
-  xgb_rmse <- sqrt(mean((xgb_predictions - test_data$Happiness)^2))
+  lm_rmse <- round(sqrt(mean((lm_predictions - test_data$Happiness)^2)),2)
+  rf_rmse <- round(sqrt(mean((rf_predictions - test_data$Happiness)^2)),3)
+  xgb_rmse <- round(sqrt(mean((xgb_predictions - test_data$Happiness)^2)),2)
 
-  lm_r_squared <- summary(lm_model)$r.squared
-  rf_r_squared <- cor(rf_predictions, test_data$Happiness)^2
-  xgb_r_squared <- 1 - sum((xgb_predictions - test_data$Happiness)^2) / sum((test_data$Happiness - mean(test_data$Happiness))^2)
+  lm_r_squared <- round(summary(lm_model)$r.squared, 2)
+  rf_r_squared <- round(cor(rf_predictions, test_data$Happiness)^2, 2)
+  xgb_r_squared <- round(
+    1 - sum((xgb_predictions - test_data$Happiness)^2) / sum((test_data$Happiness - mean(test_data$Happiness))^2),
+    2
+  )
   
   output$selected_table <- renderDT({
     if (input$table_choice == "Predictor Ranking") {
@@ -317,10 +326,10 @@ server <- function(input, output) {
     colnames(cor_long) <- c("Var1", "Var2", "Correlation")
     
     color_breaks <- seq(from = -1, to = 1, by = 0.2)
-    
+    custom_colors <- c("#b86194", "#c678a6", "#d590b8", "#e3a7ca", "#f1bedc", "#ffd6ee")
     ggplot(cor_long, aes(x = Var1, y = Var2, fill = Correlation)) +
       geom_tile() +
-      scale_fill_gradientn(colors = colors, breaks = color_breaks) +
+      scale_fill_gradientn(colors = custom_colors, breaks = color_breaks) +
       labs(title = "Correlation Matrix of Happiness and Predictors",
            x = "Variable 1",
            y = "Variable 2") +
@@ -359,9 +368,10 @@ server <- function(input, output) {
     selected_country_data <- data_cleaned[data_cleaned$Country.name == input$selected_country, ]
     colors <- c("#003f5c", "#006d87", "#009ea4", "#41cfb2", "#9cffb4")
     colors_single_1 <-  c("#6ab8d8", "#39c2d7", "#009ea4", "#006d87", "#003f5c")
+    pink<- c("#e6a1c3")
 
     plot <- ggplot(selected_country_data, aes(x = Happiness)) +
-      geom_density(fill = colors[1], alpha = 0.7) +
+      geom_density(fill = pink[1], alpha = 0.7) +
       scale_fill_manual(values = colors) +
       labs(title = paste("Distribution of Happiness in", input$selected_country),
            x = "Happiness Score",
@@ -379,7 +389,7 @@ server <- function(input, output) {
   
   # Generate scatter plot for the selected variables
   scatter_plot_selected <- ggplot(data_processed, aes(x = .data[[x_var]], y = .data[[y_var]])) +
-    geom_point(color = "#006d87", size = 3, alpha = 0.7) +  
+    geom_point(color = "#e6a1c3", size = 3, alpha = 0.7) +  
     labs(title = paste("Scatter Plot of", x_var, "vs", y_var),
          x = x_var,
          y = y_var,
@@ -400,7 +410,7 @@ server <- function(input, output) {
   # Generate scatter plot for correlations with Happiness
   scatter_plot_with_correlation <- ggplot(data.frame(Variable = predictor_vars, Correlation = correlations_with_happiness), 
                                            aes(x = Variable, y = Correlation)) +
-    geom_bar(stat = "identity", fill = "#006d87") +
+    geom_bar(stat = "identity", fill = "#e6a1c3") +
     labs(title = "Correlation of Variables with Happiness",
          x = "Variable",
          y = "Correlation with Happiness") +
@@ -417,7 +427,7 @@ server <- function(input, output) {
   output$lm_coeff_plot <- renderPlot({
   lm_coeffs <- coef(lm_model)[-1]
   lm_coeff_plot <- ggplot(data.frame(Predictor = names(lm_coeffs), Coefficient = lm_coeffs), aes(x = Predictor, y = Coefficient)) +
-    geom_bar(stat = "identity", fill = colors[1], show.legend = FALSE) + 
+    geom_bar(stat = "identity", fill = pink[1], show.legend = FALSE) + 
     coord_flip() +
     labs(title = "Linear Regression Coefficients",
          x = "Predictor",
@@ -432,7 +442,7 @@ server <- function(input, output) {
   rf_importance <- varImp(rf_model)
   output$rf_importance_plot <- renderPlot({
     rf_importance_plot <- ggplot(rf_importance, aes(x = reorder(rownames(rf_importance), Overall), y = Overall)) +
-    geom_bar(stat = "identity", fill = colors[3]) +  
+    geom_bar(stat = "identity", fill = "#e6a1c3") +  
     coord_flip() +
     labs(title = "Random Forest Feature Importances",
          x = "Predictor",
