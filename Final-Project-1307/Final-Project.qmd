@@ -9,6 +9,7 @@ server: shiny
 ```{r message=FALSE, warning=FALSE}
 
 library(shiny)
+library(shinythemes)
 library(knitr)
 library(DT)  
 library(tidyverse)
@@ -23,22 +24,10 @@ library(parameters)
 library(performance)
 library(randomForest)
 library(gridExtra)
+library(xgboost)
 
 ```
 
-
-
-```{r message=FALSE, warning=FALSE,output= FALSE}
-
-library(shiny)
-# Load necessary libraries
-libraries <- c(
-  "shiny", "knitr", "DT", "tidyverse", "ggplot2", "caret",
-  "magrittr", "rvest", "glmnet", "corrplot", "grid", "parameters",
-  "performance", "randomForest", "gridExtra", "xgboost"
-)
-lapply(libraries, library, character.only = TRUE)
-```
 
 ```{r}
 
@@ -76,7 +65,7 @@ data_processed <- data_cleaned %>%
 ```
 
 ```{r}
-# Create a subset of your data containing only the relevant variables
+# Create a subset of the data
 selected_vars <- c("Happiness", predictor_vars)
 
 # Compute the correlation matrix
@@ -121,22 +110,27 @@ xgb_model <- xgboost(data = xgb_data_matrix, nrounds = 100, verbose = 0)
 ```
 
 
-
 ```{r ui}
 
 # UI
 
 ui <- fluidPage(
+  #shinythemes::themeSelector() # choose custom themes and see how they look
+  theme = shinytheme("yeti"),
+
   navbarPage(
-     title = "World Happiness Research 2005-2021",
+    
+    title = "World Happiness Research 2005-2021",
     tabPanel(title = "Introduction",
+             
             tabsetPanel(
             tabPanel(title = "About",
                     tags$p(
                     span("Welcome to the World Happiness research application! This app aims to explore the factors that contribute to global                                  happiness.The World Happiness dataset spans from 2005 to 2021 and includes various factors such as GDP, Social Support,                              Healthy Life Expectancy, Freedom, Generosity, Corruption, Positive Affect, Negative Affect, and Government Confidence. You                           can use this app to analyze predictor rankings, model comparisons, country distribution plots, correlation matrices, and                             more. Let's start exploring the data and gaining insights into the world's happiness!"),
                                    style ="line-height: 2 ;")
                         ),
-           tabPanel(title = "Literature Review",
+           tabPanel(
+             title = "Literature Review",
                     h4("Data Visualisation: World Happiness at a Glance!"),
                             "Happiness pertains to a state of wellness characterized by a spectrum of emotions spanning from profound contentment to exuberant gladness and delight. It encompasses feelings of pleasure, gratitude, satisfaction, joy, and more. Psychologists delineate happiness as a sensation rooted in positive emotions like joy, interest, pride, life satisfaction, and an appreciation of moments. In July 2011, the United Nations General Assembly initiated a movement, urging nations to engage in assessing their citizens' happiness and employing this data to inform public policies. The inaugural World Happiness Report was unveiled the subsequent year, capturing international attention from all participating nations. Subsequently, an annual report on national happiness has been published each year. This serves as a fundamental framework for governments and national leaders to explore, facilitating a study that offers insights into the status of happiness within a country. This, in turn, can empower governments to advance and enhance their overall national well-being. Numerous government officials have been harnessing the potential of this data through meticulous analysis to elevate their respective countries. The World Happiness Report has assisted each country in identifying the contributing factors to happiness. This research yields substantial value and significant insights that aid governmental leaders in making critical decisions. By visualizing data-driven factors for each nation, this study provides a foundation for pinpointing the elements that genuinely influence a country's happiness score. The United Nations (UN) General Assembly has been consistently publishing annual reports that are available for download. These reports provide an overview of the Happiness Score based on six key metrics: Economy (GDP per Capita), Family, Health (Life Expectancy), Freedom, Trust, and Generosity. These assessments are meticulously crafted with input from experts across various fields, including economics, psychology, survey analysis, and national statistics, ensuring the accurate measurement of well-being within nations. Each report is structured from a macro to micro perspective, discussing topics such as happiness, mental health, satisfaction, and ethics. The data used for these reports are gathered from sources like the Gallup World Poll Questionnaire and the World Values Survey , which cover diverse areas of interest.
 
@@ -228,23 +222,26 @@ In summary, this literature review encompasses a comprehensive examination of th
          </li>
          </ul>"),
     mainPanel(
+     uiOutput("content"),
       tabsetPanel(
         tabPanel(
           title = "Reference List",
           class = "nav-tabs-dark",
           HTML(
             '<p>Lee, A. S., Kudbuddin, A., & Teh, P. L. (2019). Data visualisation: World happiness at a glance! Advances in Visual Informatics, 60-70. <a href="https://doi.org/10.1007/978-3-030-34032-2_6" target="_blank">https://doi.org/10.1007/978-3-030-34032-2_6</a>.</p>'
-          )
+          ),
         )
-      )
-    )
+        
+     )
   )
+)))
 
 
 ```
 
 
 ```{r server}   
+
 
 # Define server
 
@@ -435,7 +432,7 @@ server <- function(input, output) {
   rf_importance <- varImp(rf_model)
   output$rf_importance_plot <- renderPlot({
     rf_importance_plot <- ggplot(rf_importance, aes(x = reorder(rownames(rf_importance), Overall), y = Overall)) +
-    geom_bar(stat = "identity", fill = colors[3]) +  # Using your third color
+    geom_bar(stat = "identity", fill = colors[3]) +  
     coord_flip() +
     labs(title = "Random Forest Feature Importances",
          x = "Predictor",
